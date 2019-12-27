@@ -1,0 +1,82 @@
+local data = require('main.data')
+
+local active = {}
+local spawn_timer
+local counter = 0
+
+local function spawn(self)
+	counter = counter + 1
+	local distance = 220
+	local random_angle = math.random(1,360)
+	local angle = math.rad(random_angle)
+	local position = vmath.vector3(data.mid_x, data.mid_y, 0)
+	local end_position = vmath.vector3()
+	end_position.x = position.x + distance * math.cos(angle)
+	end_position.y = position.y + distance * math.sin(angle)
+	local object = factory.create('#factory', position, nil, {
+		point = (counter == 4) and true or false,
+		speed = self.speed,
+		end_position = end_position,
+	}, self.scale)
+	table.insert(active, object)
+	go.set_parent(object, '.')
+	local duration = data.duration(self.speed, position, end_position) / self.frequency
+	spawn_timer = timer.delay(duration, false, function()
+		spawn(self)
+	end)
+	if counter == 4 then
+		counter = 0
+	end
+end
+
+function init(self)
+	self.speed = 10
+	self.frequency = 1.5
+	self.scale = 0.7
+	local temp = factory.create('#factory', nil, nil, {temp = true})
+	local url = msg.url(nil, temp, 'sprite')
+	self.sprite_size = go.get(url, 'size')
+	self.height = self.sprite_size.y * self.scale
+	self.width = self.sprite_size.x * self.scale
+	go.delete(temp, true)
+end
+
+local function increase_difficulty(self)
+	if self.speed < 18 then
+		self.speed = self.speed + 0.16
+	elseif self.speed < 21 then
+		self.speed = self.speed + 0.02
+	end
+	if self.frequency < 2.2 then
+		self.frequency = self.frequency + 0.014
+	elseif self.frequency < 2.5 then
+		self.frequency = self.frequency + 0.002
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('spawn') then
+		counter = 0
+		spawn(self)
+	elseif message_id == hash('remove') then
+		go.delete(message.id, true)
+		for k, v in pairs(active) do
+			if v == message.id then
+				table.remove(active, k)
+				break
+			end
+		end
+	elseif message_id == hash('stop_all') then
+		timer.cancel(spawn_timer)
+		for i = #active, 1, -1 do
+			local object = active[i]
+			table.remove(active, i)
+			go.cancel_animations(object, 'position')
+			go.animate(object, 'scale', go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_LINEAR, 0.3, 0.5, function()
+				go.delete(object, true)
+			end)
+		end
+	elseif message_id == hash('increase_difficulty') then
+		increase_difficulty(self)
+	end
+end

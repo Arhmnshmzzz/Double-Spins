@@ -1,0 +1,46 @@
+local data = require('main.data')
+
+go.property('temp', false)
+go.property('point', false)
+go.property('speed', 0)
+go.property('end_position', vmath.vector3())
+
+local function move(self)
+	go.animate('.', 'scale', go.PLAYBACK_ONCE_FORWARD, 0.7, go.EASING_LINEAR, 0.3)
+	local current_position = vmath.vector3(data.mid_x, data.mid_y, 0)
+	local duration = data.duration(self.speed, current_position, self.end_position)
+	go.animate('.', 'position', go.PLAYBACK_ONCE_FORWARD, self.end_position, go.EASING_LINEAR, duration, 0, function()
+		go.animate('.', 'scale', go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_LINEAR, 0.2, 0, function()
+			msg.post('circles#script', 'remove', {id = go.get_id()})
+		end)
+	end)
+end
+
+function init(self)
+	if not self.temp then
+		if self.point then
+			sprite.set_constant('#sprite', 'tint', data.color_two)
+		else
+			sprite.set_constant('#sprite', 'tint', data.color_one)
+		end
+		go.set_scale(0.000001)
+		move(self)
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('trigger_response') and message.enter then
+		if message.group == hash('player') then
+			if self.point then
+				msg.post('.', 'disable')
+				msg.post('score#script', 'increase_score')
+				msg.post('circles#script', 'increase_difficulty')
+				msg.post('ring#script', 'increase_difficulty')
+				msg.post('circles#script', 'remove', {id = go.get_id()})
+			else
+				msg.post('ring#script', 'collision')
+				msg.post('circles#script', 'stop_all')
+			end
+		end
+	end	
+end
